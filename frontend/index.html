@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Spirited — Every mood has a drink</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:ital,wght@0,400;0,600;1,400&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/style.css?v=9"/>
+</head>
+<body>
+
+  <!-- ── Splash / Welcome Screen ─────────────────────────────── -->
+  <div id="splash" class="splash">
+    <div class="splash-overlay"></div>
+    <div class="splash-content">
+      <div class="splash-logo">
+        <span class="logo-icon">🍸</span>
+        <span class="logo-text">Spirited</span>
+      </div>
+      <p class="splash-tagline">Every mood has a drink.</p>
+      <p class="splash-prompt">Who am I mixing for tonight?  ✦</p>
+      <div class="splash-cards">
+        <div class="splash-card" onclick="selectMode('guest')">
+          <div class="splash-card-icon">🍹</div>
+          <div class="splash-card-label">I'm a Guest</div>
+          <div class="splash-card-desc">Looking for the perfect drink for my mood</div>
+        </div>
+        <div class="splash-card" onclick="selectMode('bartender')">
+          <div class="splash-card-icon">🧑‍🍳</div>
+          <div class="splash-card-label">I'm a Bartender</div>
+          <div class="splash-card-desc">Need recipes, techniques and professional advice</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Main App (revealed after mode selection) ────────────── -->
+  <header class="header">
+    <div class="header-inner">
+      <div class="logo">
+        <span class="logo-icon">🍸</span>
+        <span class="logo-text">Spirited</span>
+      </div>
+      <p class="tagline">Every mood has a drink.</p>
+      <div id="mode-badge" class="mode-badge" style="display:none" onclick="resetMode()"></div>
+    </div>
+    <div class="header-wave">
+      <svg viewBox="0 0 1440 40" preserveAspectRatio="none">
+        <path d="M0,20 C360,40 1080,0 1440,20 L1440,40 L0,40 Z" fill="#FAF8F3"/>
+      </svg>
+    </div>
+  </header>
+
+  <!-- Chat container -->
+  <main class="chat-container" id="chat-container"></main>
+
+  <!-- Input area -->
+  <div class="input-area">
+    <div class="input-wrapper">
+      <input
+        type="text"
+        id="user-input"
+        placeholder="What's your mood tonight?"
+        autocomplete="off"
+      />
+      <button id="send-btn" onclick="sendMessage()">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="22" y1="2" x2="11" y2="13"/>
+          <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+        </svg>
+      </button>
+    </div>
+    <p class="input-hint">Try: "Surprise me" · "Something fruity" · "How do I make a Negroni?"</p>
+  </div>
+
+  <!-- Recipe modal -->
+  <div class="modal-overlay" id="modal-overlay" onclick="closeModal(event)">
+    <div class="modal" id="modal">
+      <button class="modal-close" onclick="closeModalBtn()">✕</button>
+      <div id="modal-content"></div>
+    </div>
+  </div>
+
+  <script src="/static/app.js?v=3"></script>
+</body>
+</html>
