@@ -16,7 +16,7 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 sys.path.append(str(Path(__file__).parent.parent / "rag"))
 
 from agents.orchestrator import OrchestratorAgent
-from api.models import ChatRequest, ChatResponse
+from api.models import ChatRequest, ChatResponse, EventShoppingRequest
 
 app = FastAPI(title="AI Mixologist API", version="2.0.0")
 
@@ -63,6 +63,19 @@ def chat(request: ChatRequest):
 
         return ChatResponse(**result)
 
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/event-shopping-list")
+def event_shopping_list(request: EventShoppingRequest):
+    """Generate master shopping list for a confirmed event menu."""
+    try:
+        result = orchestrator.event.build_master_shopping_list(
+            request.event_menu,
+            request.guest_count or 20
+        )
+        return result
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 

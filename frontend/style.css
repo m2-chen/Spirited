@@ -279,6 +279,54 @@ html, body {
   gap: 8px;
 }
 
+.clarifying-q-label {
+  font-size: 0.88rem;
+  color: var(--text-secondary);
+  margin-top: 10px;
+  margin-bottom: 6px;
+  line-height: 1.45;
+}
+
+.clarifying-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
+}
+
+.clarifying-chip {
+  background: var(--accent-blue-soft);
+  color: var(--accent-blue);
+  border: 1.5px solid var(--accent-blue);
+  border-radius: 999px;
+  padding: 7px 16px;
+  font-size: 0.84rem;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.15s;
+}
+
+.clarifying-chip:hover:not(:disabled) {
+  background: var(--accent-blue);
+  color: #fff;
+  transform: translateY(-2px);
+}
+
+.clarifying-chip:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.clarifying-chip--selected {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.clarifying-chip:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
 .question-text {
   font-size: 0.88rem;
   color: var(--text-secondary);
@@ -421,6 +469,193 @@ html, body {
 .pro-step-followup:hover {
   background: var(--accent-blue);
   color: white;
+}
+
+/* ── Event Menu Card ─────────────────────────────────────── */
+.event-menu-card {
+  max-width: 520px;
+  margin: 12px auto 8px 52px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-card);
+  overflow: hidden;
+  animation: fadeSlideUp 0.4s ease both;
+}
+
+.em-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px 14px;
+  background: linear-gradient(135deg, #2C5364 0%, #3A8FA3 100%);
+  color: #fff;
+}
+
+.em-icon {
+  font-size: 1.6rem;
+}
+
+.em-title {
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.em-subtitle {
+  font-size: 0.8rem;
+  opacity: 0.85;
+  margin-top: 2px;
+  text-transform: capitalize;
+}
+
+.em-item {
+  padding: 14px 20px;
+  border-bottom: 1px solid #F0EDE8;
+  animation: fadeSlideUp 0.35s ease both;
+}
+
+.em-item:last-of-type {
+  border-bottom: none;
+}
+
+.em-item-role {
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--accent-terra);
+  margin-bottom: 8px;
+}
+
+.em-item-body {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.em-item-img {
+  width: 64px;
+  height: 64px;
+  border-radius: 10px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #F0EDE8;
+}
+
+.em-item-img--placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 1.6rem;
+}
+
+.em-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.em-item-name {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 4px;
+}
+
+.em-item-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 5px;
+}
+
+.em-item-why {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  font-style: italic;
+}
+
+.em-item-servings {
+  font-size: 0.78rem;
+  color: var(--accent-blue);
+  margin-top: 4px;
+  font-weight: 500;
+}
+
+.em-footer {
+  padding: 12px 20px;
+  background: #F7F4EF;
+  border-top: 1px solid #EDE8E0;
+}
+
+.em-footer-hint {
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+/* ── Event Menu Confirmation Bar ─────────────────────────── */
+.event-confirm-bar {
+  max-width: 520px;
+  margin: 8px auto 8px 52px;
+  background: var(--bg-card);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-soft);
+  padding: 16px 20px;
+  animation: fadeSlideUp 0.3s ease both;
+}
+
+.event-confirm-label {
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 12px;
+}
+
+.event-confirm-actions {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.event-confirm-btn {
+  flex: 1;
+  min-width: 160px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-family: var(--font-sans);
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, transform 0.15s;
+  border: none;
+}
+
+.event-confirm-btn--yes {
+  background: var(--accent-blue);
+  color: #fff;
+}
+
+.event-confirm-btn--yes:hover:not(:disabled) {
+  background: #2d7a8e;
+  transform: translateY(-2px);
+}
+
+.event-confirm-btn--no {
+  background: #F0EDE8;
+  color: var(--text-secondary);
+  border: 1.5px solid #DDD8D0;
+}
+
+.event-confirm-btn--no:hover:not(:disabled) {
+  background: #E5E0D8;
+  transform: translateY(-2px);
+}
+
+.event-confirm-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* ── Shopping List Card ───────────────────────────────────── */

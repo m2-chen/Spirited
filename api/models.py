@@ -34,11 +34,32 @@ class Recommendation(BaseModel):
     pro_notes: Optional[dict] = None
 
 
+class EventMenuItem(BaseModel):
+    role: Optional[str] = None
+    name: str
+    why: Optional[str] = None
+    glass: Optional[str] = None
+    strength: Optional[str] = None
+    flavor_profile: Optional[list[str]] = []
+    ingredients: Optional[list[Ingredient]] = []
+    instructions: Optional[str] = None
+    thumbnail: Optional[str] = None
+    servings_note: Optional[str] = None
+
+
+class EventShoppingRequest(BaseModel):
+    event_menu: list[dict]
+    guest_count: Optional[int] = 20
+
+
 class ChatResponse(BaseModel):
     intent: str
     message: str
     clarifying_questions: list[str] = []
     recommendations: list[Recommendation] = []
+    event_menu: Optional[list[EventMenuItem]] = None
+    guest_count: Optional[int] = None
+    event_type: Optional[str] = None
     follow_up: Optional[str] = None
     cocktail_fact: Optional[str] = None
     shopping_list: Optional[dict] = None

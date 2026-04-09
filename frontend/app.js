@@ -2,6 +2,8 @@ const API_URL = 'http://localhost:8080';
 let chatHistory = [];
 let currentCarousel = null;
 let selectedMode = null;
+let lastEventMenu = null;
+let lastGuestCount = null;
 
 const MODES = {
   guest: { label: 'Guest Mode', icon: '🍹' }
@@ -21,7 +23,7 @@ function selectMode(mode) {
     badge.style.display = 'inline-flex';
 
     // Welcome message after splash fades
-    const welcomeText = "Perfect! I'm here to guide you to your ideal drink. Tell me how you're feeling or what you're craving — I'll take care of the rest. 🍹";
+    const welcomeText = "Welcome! Tell me how you're feeling or what you're craving tonight — I'll find the perfect drink for you. 🍹";
 
     appendAgentMessage(welcomeText);
   }, 600);
@@ -126,17 +128,53 @@ function renderAgentResponse(data) {
       bubble.innerHTML = `<p>${escapeHtml(data.message)}</p>`;
     }
 
-    // Clarifying questions
+    // Clarifying questions — collect all answers, then send together
     if (hasQuestions) {
       const qDiv = document.createElement('div');
       qDiv.className = 'clarifying-questions';
       qDiv.innerHTML = `<p class="question-text">A couple of quick questions:</p>`;
-      data.clarifying_questions.forEach(q => {
-        const p = document.createElement('p');
-        p.style.cssText = 'font-size:0.88rem;color:#3A8FA3;margin-top:6px;';
-        p.textContent = `→ ${q}`;
-        qDiv.appendChild(p);
+
+      const totalQuestions = data.clarifying_questions.length;
+      const selections = {}; // { questionIndex: selectedAnswer }
+
+      data.clarifying_questions.forEach((q, qi) => {
+        // Question label
+        const qLabel = document.createElement('p');
+        qLabel.className = 'clarifying-q-label';
+        qLabel.textContent = q;
+        qDiv.appendChild(qLabel);
+
+        // Extract short answer options from the question ("X or Y?" pattern)
+        const options = extractOptions(q) || extractPresets(q);
+        if (options) {
+          const chipsRow = document.createElement('div');
+          chipsRow.className = 'clarifying-chips';
+          options.forEach(opt => {
+            const chip = document.createElement('button');
+            chip.className = 'clarifying-chip';
+            chip.textContent = opt;
+            chip.onclick = () => {
+              // Deselect siblings in this group, select this one
+              chipsRow.querySelectorAll('.clarifying-chip').forEach(c => {
+                c.classList.remove('clarifying-chip--selected');
+              });
+              chip.classList.add('clarifying-chip--selected');
+              selections[qi] = opt;
+
+              // Once all questions are answered, send combined message
+              if (Object.keys(selections).length === totalQuestions) {
+                // Disable all chips
+                qDiv.querySelectorAll('.clarifying-chip').forEach(c => c.disabled = true);
+                const combined = Object.values(selections).join(', ');
+                sendMessage(combined);
+              }
+            };
+            chipsRow.appendChild(chip);
+          });
+          qDiv.appendChild(chipsRow);
+        }
       });
+
       bubble.appendChild(qDiv);
     }
 
@@ -148,6 +186,19 @@ function renderAgentResponse(data) {
     wrapper.appendChild(avatar);
   }
   chatContainer.appendChild(wrapper);
+
+  // Event Menu card — appears for event planning queries
+  if (data.event_menu?.length) {
+    lastEventMenu  = data.event_menu;
+    lastGuestCount = data.guest_count;
+    setTimeout(() => {
+      const card = buildEventMenu(data.event_menu, data.guest_count, data.event_type);
+      chatContainer.appendChild(card);
+      // Confirmation actions — user must approve before shopping list is generated
+      chatContainer.appendChild(buildEventConfirm());
+      scrollToBottom();
+    }, 200);
+  }
 
   // Shopping list card — appears when agent returns a shopping_list
   if (data.shopping_list) {
@@ -168,6 +219,107 @@ function renderAgentResponse(data) {
   }
 
   scrollToBottom();
+}
+
+// ── Event Menu Card ───────────────────────────────────────
+function buildEventMenu(menu, guestCount, eventType) {
+  const wrapper = document.createElement('div');
+  wrapper.className = 'event-menu-card';
+
+  const guestLabel = guestCount ? `${guestCount} guests` : '';
+  const typeLabel  = eventType  ? eventType : 'Your Event';
+  const title      = guestLabel ? `${typeLabel} · ${guestLabel}` : typeLabel;
+
+  wrapper.innerHTML = `
+    <div class="em-header">
+      <span class="em-icon">🎉</span>
+      <div>
+        <div class="em-title">Event Cocktail Menu</div>
+        <div class="em-subtitle">${escapeHtml(title)}</div>
+      </div>
+    </div>
+  `;
+
+  menu.forEach((item, i) => {
+    const section = document.createElement('div');
+    section.className = 'em-item';
+    section.style.animationDelay = `${i * 0.08}s`;
+
+    const img = item.thumbnail
+      ? `<img class="em-item-img" src="${item.thumbnail}" alt="${escapeHtml(item.name)}" onerror="this.style.display='none'">`
+      : `<div class="em-item-img em-item-img--placeholder">🍹</div>`;
+
+    const badges = (item.flavor_profile || []).slice(0, 2).map(f =>
+      `<span class="badge badge-flavor">${escapeHtml(f)}</span>`
+    ).join('');
+
+    const strengthClass = item.strength ? `badge-strength-${item.strength}` : '';
+
+    section.innerHTML = `
+      <div class="em-item-role">${escapeHtml(item.role || '')}</div>
+      <div class="em-item-body">
+        ${img}
+        <div class="em-item-info">
+          <div class="em-item-name">${escapeHtml(item.name)}</div>
+          <div class="em-item-badges">
+            ${item.strength ? `<span class="badge ${strengthClass}">${item.strength}</span>` : ''}
+            ${badges}
+          </div>
+          ${item.why ? `<div class="em-item-why">${escapeHtml(item.why)}</div>` : ''}
+          ${item.servings_note ? `<div class="em-item-servings">📊 ${escapeHtml(item.servings_note)}</div>` : ''}
+        </div>
+      </div>
+    `;
+    wrapper.appendChild(section);
+  });
+
+
+  return wrapper;
+}
+
+// ── Event Menu Confirmation Bar ───────────────────────────
+function buildEventConfirm() {
+  const bar = document.createElement('div');
+  bar.className = 'event-confirm-bar';
+  bar.innerHTML = `
+    <p class="event-confirm-label">Do you like this menu?</p>
+    <div class="event-confirm-actions">
+      <button class="event-confirm-btn event-confirm-btn--yes" onclick="confirmEventMenu(this)">
+        🛒 Love it! Get shopping list
+      </button>
+      <button class="event-confirm-btn event-confirm-btn--no" onclick="rejectEventMenu(this)">
+        🔄 Show me other options
+      </button>
+    </div>
+  `;
+  return bar;
+}
+
+async function confirmEventMenu(btn) {
+  // Disable both buttons
+  btn.closest('.event-confirm-bar').querySelectorAll('button').forEach(b => b.disabled = true);
+  btn.textContent = '⏳ Generating your list…';
+
+  try {
+    const res = await fetch(`${API_URL}/event-shopping-list`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ event_menu: lastEventMenu, guest_count: lastGuestCount })
+    });
+    const data = await res.json();
+    btn.closest('.event-confirm-bar').remove();
+    const card = buildShoppingList(data);
+    chatContainer.appendChild(card);
+    scrollToBottom();
+  } catch (err) {
+    btn.textContent = '❌ Something went wrong, try again';
+    btn.disabled = false;
+  }
+}
+
+function rejectEventMenu(btn) {
+  btn.closest('.event-confirm-bar').remove();
+  sendMessage("I don't like these options, can you suggest different cocktails for my event?");
 }
 
 // ── Shopping List Card ────────────────────────────────────
@@ -571,6 +723,69 @@ function scrollToBottom() {
   setTimeout(() => {
     window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' });
   }, 50);
+}
+
+// ── Preset chips for common open-ended questions ─────────
+function extractPresets(question) {
+  const q = question.toLowerCase();
+  if (/how many|number of guests|how many people|guest count/.test(q)) {
+    return ['Under 10', '10–20', '20–50', '50+'];
+  }
+  if (/type of event|kind of event|what.*event/.test(q)) {
+    return ['Birthday', 'Casual gathering', 'Wedding', 'Corporate'];
+  }
+  if (/venue|where.*event|indoor|outdoor/.test(q)) {
+    return ['Indoor', 'Outdoor', 'Garden', 'Rooftop'];
+  }
+  if (/time of day|when.*event|afternoon|evening/.test(q)) {
+    return ['Afternoon', 'Evening', 'Night'];
+  }
+  return null;
+}
+
+// ── Parse answer options from a clarifying question ──────
+// Handles parentheses, colon/dash delimiters, and simple "X or Y"
+function extractOptions(question) {
+  const cap   = s => s.trim().charAt(0).toUpperCase() + s.trim().slice(1);
+  const clean = s => s.replace(/\?$/, '').replace(/[()]/g, '').replace(/^or\s+/i, '').trim();
+
+  // Words that are placeholders, not real choices
+  const isJunk = s => /^(etc|etc\.|and more|other|or similar|something else|none|n\/a)$/i.test(s.trim());
+
+  const splitOptions = str => str
+    .split(/,\s*(?:or\s+)?|\s+or\s+/)
+    .map(clean)
+    .filter(s => s.length > 0 && s.length <= 45 && !isJunk(s));
+
+  // Pattern 1: options inside parentheses — "(A, B, or C)"
+  const parenMatch = question.match(/\(([^)]+)\)/);
+  if (parenMatch) {
+    const parts = splitOptions(parenMatch[1]);
+    if (parts.length >= 2) return parts.map(cap);
+  }
+
+  // Pattern 2: options after colon or em/en dash — "...for: A, B, or C" / "...for—A, B, or C"
+  const delimMatch = question.match(/[:\u2014\u2013]\s*([^:\u2014\u2013?(]+)/);
+  if (delimMatch) {
+    const parts = splitOptions(delimMatch[1]);
+    if (parts.length >= 2) return parts.map(cap);
+  }
+
+  // Pattern 3: simple "X or Y" at end of sentence
+  const orMatch = question.match(/,?\s+or\s+([^,]+)[\?.]?$/i);
+  if (orMatch) {
+    const afterOr  = clean(orMatch[1]);
+    const beforeAll = question.slice(0, question.lastIndexOf(' or ')).trim();
+    const lastComma = beforeAll.lastIndexOf(',');
+    const beforeOr  = lastComma !== -1
+      ? clean(beforeAll.slice(lastComma + 1))
+      : clean(beforeAll.replace(/^.+(for|like|between|prefer)\s+/i, ''));
+    if (beforeOr && afterOr && beforeOr.length <= 45 && afterOr.length <= 45) {
+      return [cap(beforeOr), cap(afterOr)];
+    }
+  }
+
+  return null;
 }
 
 function escapeHtml(str) {
