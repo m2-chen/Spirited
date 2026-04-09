@@ -1,84 +1,100 @@
 """
-Step 2b — Vector Store
-Embeds cocktail documents using OpenAI and loads them into ChromaDB.
-Run this script once enrichment is complete (or re-run to refresh).
+Step 2b — Vector Store (SQLite version)
+Embeds cocktail documents using OpenAI and stores them in the SQLite database.
+Run this script once, or re-run to embed any cocktails missing embeddings.
 """
 
 import json
 import os
+import sqlite3
+import numpy as np
 from pathlib import Path
 from dotenv import load_dotenv
-import chromadb
 from openai import OpenAI
 from document_builder import build_document
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-DATA_PATH = Path(__file__).parent.parent / "data" / "cocktails_enriched.json"
-CHROMA_PATH = Path(__file__).parent.parent / "data" / "chroma_db"
-COLLECTION_NAME = "cocktails"
-EMBED_MODEL = "text-embedding-3-small"
-BATCH_SIZE = 50  # OpenAI embedding batch limit
+DB_PATH        = Path(__file__).parent.parent / "data" / "cocktails.db"
+EMBED_MODEL    = "text-embedding-3-small"
+BATCH_SIZE     = 50
 
 
-def get_collection(client: chromadb.Client):
-    return client.get_or_create_collection(
-        name=COLLECTION_NAME,
-        metadata={"hnsw:space": "cosine"}  # use cosine similarity
-    )
+def get_connection():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
 
 
-def embed_batch(openai_client: OpenAI, texts: list[str]) -> list[list[float]]:
-    response = openai_client.embeddings.create(model=EMBED_MODEL, input=texts)
+def ensure_embeddings_table(con):
+    con.execute("""
+        CREATE TABLE IF NOT EXISTS embeddings (
+            cocktail_id TEXT PRIMARY KEY REFERENCES cocktails(id) ON DELETE CASCADE,
+            document    TEXT NOT NULL,
+            embedding   TEXT NOT NULL
+        )
+    """)
+    con.commit()
+
+
+def load_cocktail(con, cocktail_id: str) -> dict:
+    """Reconstruct a cocktail dict from SQLite for document building."""
+    row = con.execute("SELECT * FROM cocktails WHERE id = ?", (cocktail_id,)).fetchone()
+    if not row:
+        return {}
+    c = dict(row)
+    c["ingredients"]    = [dict(r) for r in con.execute(
+        "SELECT ingredient, measure FROM ingredients WHERE cocktail_id = ?", (cocktail_id,))]
+    c["flavor_profile"] = [r[0] for r in con.execute(
+        "SELECT flavor FROM flavor_profiles WHERE cocktail_id = ?", (cocktail_id,))]
+    c["mood"]           = [r[0] for r in con.execute(
+        "SELECT mood FROM moods WHERE cocktail_id = ?", (cocktail_id,))]
+    c["taste_tags"]     = [r[0] for r in con.execute(
+        "SELECT tag FROM taste_tags WHERE cocktail_id = ?", (cocktail_id,))]
+    c["best_for"]       = [r[0] for r in con.execute(
+        "SELECT use_case FROM best_for WHERE cocktail_id = ?", (cocktail_id,))]
+    return c
+
+
+def embed_batch(client: OpenAI, texts: list[str]) -> list[list[float]]:
+    response = client.embeddings.create(model=EMBED_MODEL, input=texts)
     return [r.embedding for r in response.data]
 
 
 def build_vector_store():
-    print("Loading cocktail data...")
-    cocktails = json.loads(DATA_PATH.read_text())
-    print(f"  {len(cocktails)} cocktails loaded")
+    con = get_connection()
+    ensure_embeddings_table(con)
 
-    openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
-    chroma_client = chromadb.PersistentClient(path=str(CHROMA_PATH))
-    collection = get_collection(chroma_client)
+    # Find cocktails not yet embedded
+    all_ids     = {r[0] for r in con.execute("SELECT id FROM cocktails")}
+    embedded_ids = {r[0] for r in con.execute("SELECT cocktail_id FROM embeddings")}
+    pending_ids  = list(all_ids - embedded_ids)
 
-    # Skip already embedded cocktails
-    existing_ids = set(collection.get()["ids"])
-    cocktails = [c for c in cocktails if c["id"] not in existing_ids]
-
-    if not cocktails:
-        print("  All cocktails already embedded. Nothing to do.")
+    if not pending_ids:
+        print("All cocktails already embedded. Nothing to do.")
+        con.close()
         return
 
-    print(f"  Embedding {len(cocktails)} cocktails in batches of {BATCH_SIZE}...")
+    print(f"Embedding {len(pending_ids)} cocktails in batches of {BATCH_SIZE}...")
+    openai_client = OpenAI(api_key=os.environ["OPENAI_API_KEY"])
 
-    for i in range(0, len(cocktails), BATCH_SIZE):
-        batch = cocktails[i: i + BATCH_SIZE]
-        documents = [build_document(c) for c in batch]
+    for i in range(0, len(pending_ids), BATCH_SIZE):
+        batch_ids = pending_ids[i: i + BATCH_SIZE]
+        cocktails = [load_cocktail(con, cid) for cid in batch_ids]
+        documents = [build_document(c) for c in cocktails]
         embeddings = embed_batch(openai_client, documents)
 
-        collection.add(
-            ids=[c["id"] for c in batch],
-            embeddings=embeddings,
-            documents=documents,
-            metadatas=[{
-                "name": c["name"],
-                "category": c.get("category", ""),
-                "alcoholic": c.get("alcoholic", ""),
-                "glass": c.get("glass", ""),
-                "strength": c.get("strength", ""),
-                "flavor_profile": ", ".join(c.get("flavor_profile", [])),
-                "mood": ", ".join(c.get("mood", [])),
-                "best_for": ", ".join(c.get("best_for", [])),
-                "thumbnail": c.get("thumbnail", ""),
-                "ingredients": json.dumps(c.get("ingredients", [])),
-                "instructions": c.get("instructions", ""),
-            } for c in batch],
+        con.executemany(
+            "INSERT OR REPLACE INTO embeddings (cocktail_id, document, embedding) VALUES (?, ?, ?)",
+            [(cid, doc, json.dumps(emb))
+             for cid, doc, emb in zip(batch_ids, documents, embeddings)]
         )
-        print(f"  [{min(i + BATCH_SIZE, len(cocktails) + i)}/{len(cocktails)}] batch embedded")
+        con.commit()
+        print(f"  [{min(i + BATCH_SIZE, len(pending_ids))}/{len(pending_ids)}] embedded")
 
-    total = collection.count()
-    print(f"\nDone. {total} cocktails stored in ChromaDB at {CHROMA_PATH}")
+    total = con.execute("SELECT COUNT(*) FROM embeddings").fetchone()[0]
+    print(f"\nDone. {total} cocktails embedded in {DB_PATH}")
+    con.close()
 
 
 if __name__ == "__main__":

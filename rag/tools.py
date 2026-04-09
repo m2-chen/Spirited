@@ -9,16 +9,21 @@ Four tools the agent can autonomously call:
 
 import json
 import os
+import sqlite3
 from pathlib import Path
 from dotenv import load_dotenv
 from openai import OpenAI
 from tavily import TavilyClient
-import chromadb
 
 load_dotenv(Path(__file__).parent.parent / ".env")
 
-CHROMA_PATH = Path(__file__).parent.parent / "data" / "chroma_db"
-DATA_PATH   = Path(__file__).parent.parent / "data" / "cocktails_enriched.json"
+DB_PATH = Path(__file__).parent.parent / "data" / "cocktails.db"
+
+
+def _get_connection():
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+    return con
 
 # ── OpenAI function definitions (sent to the LLM) ──────────────────────────
 
@@ -154,46 +159,51 @@ TOOLS_SCHEMA = [
 
 def filter_by_ingredients(ingredients: list[str]) -> dict:
     """
-    Scans the full cocktail database and returns cocktails
-    where ALL required ingredients are available.
-    Partial matches (missing 1) are also returned as suggestions.
+    Queries SQLite to find cocktails where all required ingredients
+    are available. Partial matches (missing 1) are also returned.
     """
-    cocktails = json.loads(DATA_PATH.read_text())
     user_ingredients = {i.lower().strip() for i in ingredients}
+    con = _get_connection()
+
+    # Get all cocktails with their ingredients
+    cocktail_rows = con.execute("SELECT id, name, instructions, strength, thumbnail FROM cocktails").fetchall()
 
     exact_matches = []
     close_matches = []
 
-    for c in cocktails:
-        required = {i["ingredient"].lower().strip() for i in c["ingredients"]}
+    for row in cocktail_rows:
+        cid = row["id"]
+        ing_rows = con.execute(
+            "SELECT ingredient, measure FROM ingredients WHERE cocktail_id = ?", (cid,)
+        ).fetchall()
+        required = {r["ingredient"].lower().strip() for r in ing_rows}
         missing  = required - user_ingredients
 
+        flavors = [r[0] for r in con.execute(
+            "SELECT flavor FROM flavor_profiles WHERE cocktail_id = ?", (cid,))]
+
+        entry = {
+            "name":         row["name"],
+            "ingredients":  [dict(r) for r in ing_rows],
+            "instructions": row["instructions"],
+            "strength":     row["strength"] or "",
+            "flavor_profile": flavors,
+            "thumbnail":    row["thumbnail"] or "",
+            "missing":      list(missing)
+        }
+
         if len(missing) == 0:
-            exact_matches.append({
-                "name": c["name"],
-                "ingredients": c["ingredients"],
-                "instructions": c["instructions"],
-                "strength": c.get("strength", ""),
-                "flavor_profile": c.get("flavor_profile", []),
-                "thumbnail": c.get("thumbnail", ""),
-                "missing": []
-            })
+            exact_matches.append(entry)
         elif len(missing) == 1:
-            close_matches.append({
-                "name": c["name"],
-                "ingredients": c["ingredients"],
-                "instructions": c["instructions"],
-                "strength": c.get("strength", ""),
-                "flavor_profile": c.get("flavor_profile", []),
-                "thumbnail": c.get("thumbnail", ""),
-                "missing": list(missing)
-            })
+            close_matches.append(entry)
+
+    con.close()
 
     return {
         "exact_matches": exact_matches[:5],
         "close_matches": close_matches[:5],
-        "total_exact": len(exact_matches),
-        "total_close": len(close_matches)
+        "total_exact":   len(exact_matches),
+        "total_close":   len(close_matches)
     }
 
 
