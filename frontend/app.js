@@ -4,8 +4,7 @@ let currentCarousel = null;
 let selectedMode = null;
 
 const MODES = {
-  guest:      { label: 'Guest Mode', icon: '🍹' },
-  bartender:  { label: 'Bartender Mode', icon: '🧑‍🍳' }
+  guest: { label: 'Guest Mode', icon: '🍹' }
 };
 
 function selectMode(mode) {
@@ -22,9 +21,7 @@ function selectMode(mode) {
     badge.style.display = 'inline-flex';
 
     // Welcome message after splash fades
-    const welcomeText = mode === 'guest'
-      ? "Perfect! I'm here to guide you to your ideal drink. Tell me how you're feeling or what you're craving — I'll take care of the rest. 🍹"
-      : "Welcome, colleague! Ask me anything — recipes, ratios, techniques, substitutions. Let's talk craft. 🧑‍🍳";
+    const welcomeText = "Perfect! I'm here to guide you to your ideal drink. Tell me how you're feeling or what you're craving — I'll take care of the rest. 🍹";
 
     appendAgentMessage(welcomeText);
   }, 600);
@@ -305,76 +302,26 @@ function copyShoppingList(btn) {
   });
 }
 
-// ── Build carousel ────────────────────────────────────────
+// ── Build recommendations row ─────────────────────────────
 function buildCarousel(recommendations) {
   const wrapper = document.createElement('div');
-  wrapper.className = 'carousel-wrapper';
+  wrapper.className = 'recommendations-wrapper';
 
   const label = document.createElement('p');
-  label.className = 'carousel-label';
-  label.textContent = `${recommendations.length} recommendations for you`;
+  label.className = 'recommendations-label';
+  label.textContent = `${recommendations.length} recommendation${recommendations.length > 1 ? 's' : ''} for you`;
   wrapper.appendChild(label);
 
-  const trackContainer = document.createElement('div');
-  trackContainer.className = 'carousel-track-container';
-
-  const track = document.createElement('div');
-  track.className = 'carousel-track';
+  const row = document.createElement('div');
+  row.className = 'recommendations-row';
 
   recommendations.forEach((rec, i) => {
     const card = buildCard(rec, i);
-    track.appendChild(card);
+    row.appendChild(card);
   });
 
-  trackContainer.appendChild(track);
-  wrapper.appendChild(trackContainer);
-
-  // Navigation
-  const nav = document.createElement('div');
-  nav.className = 'carousel-nav';
-
-  const dots = document.createElement('div');
-  dots.className = 'carousel-dots';
-  recommendations.forEach((_, i) => {
-    const dot = document.createElement('div');
-    dot.className = `carousel-dot ${i === 0 ? 'active' : ''}`;
-    dot.onclick = () => goToCard(track, dots, i);
-    dots.appendChild(dot);
-  });
-
-  const prevBtn = document.createElement('button');
-  prevBtn.className = 'carousel-btn';
-  prevBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15,18 9,12 15,6"/></svg>`;
-
-  const nextBtn = document.createElement('button');
-  nextBtn.className = 'carousel-btn';
-  nextBtn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9,18 15,12 9,6"/></svg>`;
-
-  let currentIndex = 0;
-
-  prevBtn.onclick = () => {
-    currentIndex = Math.max(0, currentIndex - 1);
-    goToCard(track, dots, currentIndex);
-  };
-  nextBtn.onclick = () => {
-    currentIndex = Math.min(recommendations.length - 1, currentIndex + 1);
-    goToCard(track, dots, currentIndex);
-  };
-
-  nav.appendChild(prevBtn);
-  nav.appendChild(dots);
-  nav.appendChild(nextBtn);
-  wrapper.appendChild(nav);
-
+  wrapper.appendChild(row);
   return wrapper;
-}
-
-function goToCard(track, dots, index) {
-  const cardWidth = 220 + 14;
-  track.style.transform = `translateX(-${index * cardWidth}px)`;
-  dots.querySelectorAll('.carousel-dot').forEach((d, i) => {
-    d.classList.toggle('active', i === index);
-  });
 }
 
 // ── Build single card ─────────────────────────────────────
@@ -431,9 +378,7 @@ function buildCard(rec, index) {
   if (rec.pro_notes) {
     const btn = document.createElement('button');
     btn.className = 'pro-guide-btn';
-    btn.innerHTML = selectedMode === 'bartender'
-      ? `<span>🍸</span> Start Preparation Guide`
-      : `<span>✨</span> How to make it?`;
+    btn.innerHTML = `<span>✨</span> How to make it?`;
     btn.onclick = (e) => {
       e.stopPropagation();
       btn.disabled = true;

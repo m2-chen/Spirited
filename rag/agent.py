@@ -87,7 +87,7 @@ class MixologistAgent:
                 needs_pro_notes = (
                     not is_followup
                     and not pro_notes_result
-                    and (is_prep_query or result.get("intent") == "bartender")
+                    and is_prep_query
                     and result.get("recommendations")
                 )
                 if needs_pro_notes:
