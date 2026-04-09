@@ -1,9 +1,9 @@
 """
 Step 5 — Backend API
-FastAPI server exposing the Mixologist agent as a REST API.
+FastAPI server exposing the multi-agent Mixologist orchestrator as a REST API.
 """
 
-import json
+import sqlite3
 import sys
 from pathlib import Path
 from dotenv import load_dotenv
@@ -15,12 +15,11 @@ from fastapi.responses import FileResponse
 load_dotenv(Path(__file__).parent.parent / ".env")
 sys.path.append(str(Path(__file__).parent.parent / "rag"))
 
-from agent import MixologistAgent
+from agents.orchestrator import OrchestratorAgent
 from api.models import ChatRequest, ChatResponse
 
-app = FastAPI(title="AI Mixologist API", version="1.0.0")
+app = FastAPI(title="AI Mixologist API", version="2.0.0")
 
-# Allow frontend to talk to the API
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -28,12 +27,15 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Single agent instance shared across requests
-agent = MixologistAgent()
+# Single orchestrator instance shared across requests
+orchestrator = OrchestratorAgent()
+
+DB_PATH = Path(__file__).parent.parent / "data" / "cocktails.db"
 
 # Serve frontend
 FRONTEND_PATH = Path(__file__).parent.parent / "frontend"
 app.mount("/static", StaticFiles(directory=str(FRONTEND_PATH)), name="static")
+
 
 @app.get("/")
 def serve_frontend():
@@ -42,19 +44,18 @@ def serve_frontend():
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "agent": "AI Mixologist"}
+    return {"status": "ok", "agent": "AI Mixologist — Multi-Agent v2"}
 
 
 @app.post("/chat", response_model=ChatResponse)
 def chat(request: ChatRequest):
     try:
-        # Convert history to the format the agent expects
         history = [
             {"role": msg.role, "content": msg.content}
             for msg in request.history
         ]
 
-        result = agent.run(
+        result = orchestrator.run(
             user_message=request.message,
             chat_history=history if history else None,
             mode=request.mode
@@ -73,34 +74,61 @@ def list_cocktails(
     strength: str = None,
     alcoholic: str = None
 ):
-    """Browse the cocktail database with optional filters."""
-    data_path = Path(__file__).parent.parent / "data" / "cocktails_enriched.json"
-    cocktails = json.loads(data_path.read_text())
+    """Browse the cocktail database with optional filters — powered by SQLite."""
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
+
+    query = "SELECT id, name, category, alcoholic, glass, instructions, thumbnail, strength FROM cocktails WHERE 1=1"
+    params = []
 
     if strength:
-        cocktails = [c for c in cocktails if c.get("strength") == strength]
+        query += " AND strength = ?"
+        params.append(strength)
     if alcoholic:
-        cocktails = [c for c in cocktails if c.get("alcoholic", "").lower() == alcoholic.lower()]
+        query += " AND LOWER(alcoholic) = LOWER(?)"
+        params.append(alcoholic)
 
-    total = len(cocktails)
-    page = cocktails[offset: offset + limit]
+    total = con.execute(f"SELECT COUNT(*) FROM ({query})", params).fetchone()[0]
+    rows  = con.execute(query + " LIMIT ? OFFSET ?", params + [limit, offset]).fetchall()
 
-    return {
-        "total": total,
-        "offset": offset,
-        "limit": limit,
-        "cocktails": page
-    }
+    cocktails = []
+    for row in rows:
+        cid = row["id"]
+        c = dict(row)
+        c["ingredients"]    = [dict(r) for r in con.execute(
+            "SELECT ingredient, measure FROM ingredients WHERE cocktail_id = ?", (cid,))]
+        c["flavor_profile"] = [r[0] for r in con.execute(
+            "SELECT flavor FROM flavor_profiles WHERE cocktail_id = ?", (cid,))]
+        c["mood"]           = [r[0] for r in con.execute(
+            "SELECT mood FROM moods WHERE cocktail_id = ?", (cid,))]
+        c["best_for"]       = [r[0] for r in con.execute(
+            "SELECT use_case FROM best_for WHERE cocktail_id = ?", (cid,))]
+        cocktails.append(c)
+
+    con.close()
+    return {"total": total, "offset": offset, "limit": limit, "cocktails": cocktails}
 
 
 @app.get("/cocktails/{cocktail_id}")
 def get_cocktail(cocktail_id: str):
-    """Get a single cocktail by ID."""
-    data_path = Path(__file__).parent.parent / "data" / "cocktails_enriched.json"
-    cocktails = json.loads(data_path.read_text())
+    """Get a single cocktail by ID from SQLite."""
+    con = sqlite3.connect(DB_PATH)
+    con.row_factory = sqlite3.Row
 
-    match = next((c for c in cocktails if c["id"] == cocktail_id), None)
-    if not match:
+    row = con.execute("SELECT * FROM cocktails WHERE id = ?", (cocktail_id,)).fetchone()
+    if not row:
+        con.close()
         raise HTTPException(status_code=404, detail="Cocktail not found")
 
-    return match
+    c = dict(row)
+    c["ingredients"]    = [dict(r) for r in con.execute(
+        "SELECT ingredient, measure FROM ingredients WHERE cocktail_id = ?", (cocktail_id,))]
+    c["flavor_profile"] = [r[0] for r in con.execute(
+        "SELECT flavor FROM flavor_profiles WHERE cocktail_id = ?", (cocktail_id,))]
+    c["mood"]           = [r[0] for r in con.execute(
+        "SELECT mood FROM moods WHERE cocktail_id = ?", (cocktail_id,))]
+    c["best_for"]       = [r[0] for r in con.execute(
+        "SELECT use_case FROM best_for WHERE cocktail_id = ?", (cocktail_id,))]
+
+    con.close()
+    return c
